@@ -1,0 +1,371 @@
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+
+// ─────────────────────────────────────────────
+// 1. Shippable interface (as required by the challenge)
+// ─────────────────────────────────────────────
+interface Shippable {
+    String getName();
+    double getWeight();
+}
+
+// ─────────────────────────────────────────────
+// 2. Base Product class
+// ─────────────────────────────────────────────
+class Product {
+    String name;
+    double price;
+    int quantity;
+
+    public Product(String name, double price, int quantity) {
+        this.name = name;
+        this.price = price;
+        this.quantity = quantity;
+    }
+
+    public boolean isExpired() {
+        return false; // By default, products don't expire
+    }
+
+    public boolean requiresShipping() {
+        return false; // By default, no shipping needed
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public double getPrice() {
+        return price;
+    }
+
+    public int getQuantity() {
+        return quantity;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 3. ExpirableProduct – for products that can expire (e.g. Cheese, Biscuits)
+// ─────────────────────────────────────────────
+class ExpirableProduct extends Product {
+    LocalDate expiryDate;
+
+    public ExpirableProduct(String name, double price, int quantity, LocalDate expiryDate) {
+        super(name, price, quantity);
+        this.expiryDate = expiryDate;
+    }
+
+    @Override
+    public boolean isExpired() {
+        return LocalDate.now().isAfter(expiryDate);
+    }
+}
+
+// ─────────────────────────────────────────────
+// 4. ShippableProduct – for products that need shipping (e.g. TV)
+//    Implements Shippable so it can be sent to ShippingService
+// ─────────────────────────────────────────────
+class ShippableProduct extends Product implements Shippable {
+    double weight; // in kg
+
+    public ShippableProduct(String name, double price, int quantity, double weight) {
+        super(name, price, quantity);
+        this.weight = weight;
+    }
+
+    @Override
+    public boolean requiresShipping() {
+        return true;
+    }
+
+    @Override
+    public double getWeight() {
+        return weight;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 5. ExpirableShippableProduct – expires AND needs shipping (e.g. Cheese, Biscuits)
+// ─────────────────────────────────────────────
+class ExpirableShippableProduct extends Product implements Shippable {
+    LocalDate expiryDate;
+    double weight;
+
+    public ExpirableShippableProduct(String name, double price, int quantity,
+                                     LocalDate expiryDate, double weight) {
+        super(name, price, quantity);
+        this.expiryDate = expiryDate;
+        this.weight = weight;
+    }
+
+    @Override
+    public boolean isExpired() {
+        return LocalDate.now().isAfter(expiryDate);
+    }
+
+    @Override
+    public boolean requiresShipping() {
+        return true;
+    }
+
+    @Override
+    public double getWeight() {
+        return weight;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 6. CartItem – holds a product and the quantity the customer wants
+// ─────────────────────────────────────────────
+class CartItem {
+    Product product;
+    int qty;
+
+    public CartItem(Product product, int qty) {
+        this.product = product;
+        this.qty = qty;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 7. Cart – manages items the customer picks
+// ─────────────────────────────────────────────
+class Cart {
+    List<CartItem> items = new ArrayList<>();
+
+    public void add(Product product, int qty) {
+        if (qty > product.getQuantity()) {
+            System.out.println("ERROR: Not enough stock for " + product.getName()
+                    + ". Available: " + product.getQuantity());
+            return;
+        }
+        items.add(new CartItem(product, qty));
+        System.out.println("Added " + qty + "x " + product.getName() + " to cart.");
+    }
+
+    public boolean isEmpty() {
+        return items.isEmpty();
+    }
+
+    public List<CartItem> getItems() {
+        return items;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 8. Customer – has a name and a balance
+// ─────────────────────────────────────────────
+class Customer {
+    String name;
+    double balance;
+
+    public Customer(String name, double balance) {
+        this.name = name;
+        this.balance = balance;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 9. ShippingService – receives shippable items and prints shipment notice
+// ─────────────────────────────────────────────
+class ShippingService {
+    // Shipping cost per kg
+    static final double RATE_PER_KG = 10.0;
+
+    public static double ship(List<Shippable> shippableItems, List<Integer> quantities) {
+        System.out.println("** Shipment notice **");
+        double totalWeight = 0;
+
+        for (int i = 0; i < shippableItems.size(); i++) {
+            Shippable item = shippableItems.get(i);
+            int qty = quantities.get(i);
+            double itemWeight = item.getWeight() * qty;
+            totalWeight += itemWeight;
+
+            // Convert weight to grams for display if less than 1 kg
+            String weightDisplay;
+            if (item.getWeight() < 1.0) {
+                weightDisplay = (int)(item.getWeight() * 1000) + "g";
+            } else {
+                weightDisplay = item.getWeight() + "kg";
+            }
+            System.out.println(qty + "x " + item.getName() + " " + weightDisplay);
+        }
+
+        System.out.printf("Total package weight %.1fkg%n", totalWeight);
+        System.out.println();
+
+        return totalWeight * RATE_PER_KG;
+    }
+}
+
+// ─────────────────────────────────────────────
+// 10. CheckoutService – handles the checkout logic
+// ─────────────────────────────────────────────
+class CheckoutService {
+
+    public static void checkout(Customer customer, Cart cart) {
+
+        // ── Validation checks ──────────────────────────
+        if (cart.isEmpty()) {
+            System.out.println("ERROR: Cart is empty. Add items before checkout.");
+            return;
+        }
+
+        for (CartItem item : cart.getItems()) {
+            Product p = item.product;
+
+            if (p.isExpired()) {
+                System.out.println("ERROR: Product '" + p.getName() + "' is expired.");
+                return;
+            }
+
+            if (p.getQuantity() == 0) {
+                System.out.println("ERROR: Product '" + p.getName() + "' is out of stock.");
+                return;
+            }
+
+            if (item.qty > p.getQuantity()) {
+                System.out.println("ERROR: Not enough stock for '" + p.getName() + "'.");
+                return;
+            }
+        }
+
+        // ── Collect shippable items ────────────────────
+        List<Shippable> shippableItems = new ArrayList<>();
+        List<Integer> shippableQtys = new ArrayList<>();
+
+        for (CartItem item : cart.getItems()) {
+            if (item.product.requiresShipping()) {
+                shippableItems.add((Shippable) item.product);
+                shippableQtys.add(item.qty);
+            }
+        }
+
+        // ── Shipping fees ──────────────────────────────
+        double shippingFees = 0;
+        if (!shippableItems.isEmpty()) {
+            shippingFees = ShippingService.ship(shippableItems, shippableQtys);
+        }
+
+        // ── Calculate subtotal ─────────────────────────
+        double subtotal = 0;
+        for (CartItem item : cart.getItems()) {
+            subtotal += item.product.getPrice() * item.qty;
+        }
+
+        double totalAmount = subtotal + shippingFees;
+
+        // ── Check balance ──────────────────────────────
+        if (customer.balance < totalAmount) {
+            System.out.println("ERROR: Insufficient balance. You need "
+                    + totalAmount + " but have " + customer.balance);
+            return;
+        }
+
+        // ── Deduct stock ───────────────────────────────
+        for (CartItem item : cart.getItems()) {
+            item.product.quantity -= item.qty;
+        }
+
+        // ── Deduct balance ─────────────────────────────
+        customer.balance -= totalAmount;
+
+        // ── Print receipt ──────────────────────────────
+        System.out.println("** Checkout receipt **");
+        for (CartItem item : cart.getItems()) {
+            System.out.println(item.qty + "x " + item.product.getName()
+                    + "  " + (item.product.getPrice() * item.qty));
+        }
+        System.out.println("----------------------");
+        System.out.println("Subtotal   " + subtotal);
+        System.out.println("Shipping   " + shippingFees);
+        System.out.println("Amount     " + totalAmount);
+        System.out.println("Balance    " + customer.balance);
+        System.out.println("END.");
+    }
+}
+
+// ─────────────────────────────────────────────
+// 11. Main – demo / test all use cases
+// ─────────────────────────────────────────────
+public class FawryEcommerce {
+
+    public static void main(String[] args) {
+
+        // ── Define products ────────────────────────────
+        ExpirableShippableProduct cheese =
+                new ExpirableShippableProduct("Cheese", 100, 10,
+                        LocalDate.of(2026, 12, 31), 0.2); // 200g each
+
+        ExpirableShippableProduct biscuits =
+                new ExpirableShippableProduct("Biscuits", 150, 5,
+                        LocalDate.of(2026, 6, 30), 0.7); // 700g each
+
+        ShippableProduct tv =
+                new ShippableProduct("TV", 5000, 3, 5.0); // 5kg each
+
+        Product scratchCard =
+                new Product("Mobile Scratch Card", 50, 20); // no expiry, no shipping
+
+        ExpirableProduct milk =
+                new ExpirableProduct("Milk", 30, 8,
+                        LocalDate.of(2024, 1, 1)); // already expired!
+
+
+        // ═══════════════════════════════════════════════
+        // Test Case 1 – Normal successful checkout
+        // ═══════════════════════════════════════════════
+        System.out.println("========== Test 1: Normal Checkout ==========");
+        Customer ahmed = new Customer("Ahmed", 1000);
+        Cart cart1 = new Cart();
+        cart1.add(cheese, 2);
+        cart1.add(biscuits, 1);
+        cart1.add(scratchCard, 1);
+        System.out.println();
+        CheckoutService.checkout(ahmed, cart1);
+
+        System.out.println();
+
+        // ═══════════════════════════════════════════════
+        // Test Case 2 – Empty cart
+        // ═══════════════════════════════════════════════
+        System.out.println("========== Test 2: Empty Cart ==========");
+        Customer sara = new Customer("Sara", 500);
+        Cart cart2 = new Cart();
+        CheckoutService.checkout(sara, cart2);
+
+        System.out.println();
+
+        // ═══════════════════════════════════════════════
+        // Test Case 3 – Insufficient balance
+        // ═══════════════════════════════════════════════
+        System.out.println("========== Test 3: Insufficient Balance ==========");
+        Customer poor = new Customer("Ali", 10);
+        Cart cart3 = new Cart();
+        cart3.add(tv, 1);
+        System.out.println();
+        CheckoutService.checkout(poor, cart3);
+
+        System.out.println();
+        System.out.println("========== Test 4: Expired Product ==========");
+        Customer mona = new Customer("Mona", 500);
+        Cart cart4 = new Cart();
+        cart4.add(milk, 1);
+        System.out.println();
+        CheckoutService.checkout(mona, cart4);
+        System.out.println();
+        System.out.println("========== Test 5: Quantity Exceeds Stock ==========");
+        Customer omar = new Customer("Omar", 9999);
+        Cart cart5 = new Cart();
+        cart5.add(tv, 100); // only 3 in stock
+        System.out.println();
+        System.out.println("========== Test 6: No Shipping Needed ==========");
+        Customer nada = new Customer("Nada", 500);
+        Cart cart6 = new Cart();
+        cart6.add(scratchCard, 3);
+        System.out.println();
+        CheckoutService.checkout(nada, cart6);
+    }
+}
